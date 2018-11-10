@@ -33,7 +33,7 @@ use File::Basename;
 undef $/;
 my $template = <::DATA>;
 close ::DATA;
-$/ = "\n";
+local $/ = "\n";
 
 
 sub not_found {
@@ -46,6 +46,7 @@ sub not_found {
     $cgi->h1('404'),
     $cgi->h2('Not found'),
     $cgi->end_html;
+    return;
 }
 
 sub output_file {
@@ -55,7 +56,6 @@ sub output_file {
     my $content_type = shift;
     my @stat = stat $path;
     my $size = $stat[7];
-    open my $fh, '<:raw', $path;
     print "HTTP/1.0 200 OK\r\n",
           $cgi->header(
               -type => $content_type,
@@ -63,17 +63,19 @@ sub output_file {
               );
     my $bytes;
     binmode(STDOUT, ":raw");
+    open my $fh, '<:raw', $path;
     while (read($fh, $bytes, 125000)) {
         print $bytes;
     }
     close $fh;
+    return;
 }
 
 sub handle_request {
     my $self = shift;
     my $cgi  = shift;
 
-    binmode(STDOUT, ":utf8");
+    binmode(STDOUT, ":encoding(UTF-8)");
     my $path = $cgi->path_info();
     my $fullpath = $root.$path;
 
@@ -99,7 +101,7 @@ sub handle_request {
             }
             foreach my $file (sort @files) {
                 my $img = 'https://upload.wikimedia.org/wikipedia/commons/thumb/9/9d/Icons8_flat_document.svg/240px-Icons8_flat_document.svg.png';
-                if (-d $fullpath."/".$file) {
+                if (-d ($fullpath."/".$file)) {
                     $img = 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/a1/Icons8_flat_folder.svg/240px-Icons8_flat_folder.svg.png';
                 }
                 if ($file =~ m/\.(pdf|djvu)$/) {
@@ -155,6 +157,7 @@ sub handle_request {
             $self->not_found($cgi);
         }
     }
+    return;
 }
 
 
