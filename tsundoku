@@ -172,7 +172,8 @@ sub handle_request {
             $input_file = "$dir$name.djvu";
         }
         if (-e $input_file) {
-            my $sth = $db->prepare(qq(SELECT * FROM BOOKS WHERE NAME='$input_file';)) or die $DBI::errstr;
+            my $sth = $db->prepare(qq(SELECT * FROM BOOKS WHERE NAME=?;)) or die $DBI::errstr;
+            $sth->bind_param(1, $input_file, SQL_VARCHAR);
             my $rv = $sth->execute() or die $DBI::errstr;
             my @row = $sth->fetchrow_array();
             if (@row) {
@@ -181,8 +182,9 @@ sub handle_request {
                 my $out_image = "/tmp/$name.png";
                 system("convert -thumbnail x250 -background white -alpha remove :\"$input_file\"[0] \"$out_image\"");
                 my $blob = `cat "$out_image"`;
-                my $sth = $db->prepare("INSERT OR REPLACE INTO BOOKS VALUES ('$input_file', ?)");
-                $sth->bind_param(1, $blob, SQL_BLOB);
+                my $sth = $db->prepare("INSERT OR REPLACE INTO BOOKS VALUES (?, ?)");
+                $sth->bind_param(1, $input_file, SQL_VARCHAR);
+                $sth->bind_param(2, $blob, SQL_BLOB);
                 $sth->execute();
                 unlink($out_image);
                 $self->output_binary($cgi, \$blob, 'image/png');
