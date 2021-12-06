@@ -2,7 +2,7 @@
 Simple Perl-based web ebook server.
 Tested only on *Linux* but should work on any *Unix* platform.
 Requires only modern 5.10+ Perl version and ImageMagic with pdf/djvu reading capability installed.
-Only has HTTP::Server::Simple CPAN dependency.
+Only has DBI, DBM::SQLite and HTTP::Server::Simple CPAN dependency.
 
 ## NOTE
 
@@ -21,7 +21,7 @@ This serves pretty much any file via web under from folder and sub-folders and w
 
 To install just run this command:
 
-    $ sudo cpanm HTTP::Server::Simple
+    $ sudo cpanm DBI DBD::SQLite HTTP::Server::Simple
     $ sudo curl https://raw2.github.com/troydm/tsundoku/master/tsundoku -o /usr/local/bin/tsundoku
     $ sudo chmod +x /usr/local/bin/tsundoku
 

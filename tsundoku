@@ -1,6 +1,6 @@
 #!/usr/bin/env perl
 
-# Copyright (C) 2018 Dmitry Geurkov - All Rights Reserved
+# Copyright (C) 2018-2021 Dmitry Geurkov - All Rights Reserved
 # You may use, distribute and modify this code under the
 # terms of the MIT license
 #
@@ -24,6 +24,7 @@ my $root = getcwd;
 
 {
 package Tsundoku;
+use DBI qw(:sql_types);
 use HTTP::Server::Simple;
 use base qw(HTTP::Server::Simple::CGI);
 
@@ -35,6 +36,15 @@ my $template = <::DATA>;
 close ::DATA;
 local $/ = "\n";
 
+my $db = DBI->connect('DBI:SQLite:dbname=.tsundoku.db','','', { RaiseError => 1 }) or die $DBI::errstr;
+my $stmt = qq(CREATE TABLE IF NOT EXISTS BOOKS (
+                     NAME TEXT PRIMARY KEY NOT NULL,
+                     THUMBNAIL BLOB NULL
+                ););
+my $rv = $db->do($stmt);
+if($rv < 0) {
+    die $DBI::errstr;
+}
 
 sub not_found {
     my $self = shift;
@@ -68,6 +78,22 @@ sub output_file {
         print $bytes;
     }
     close $fh;
+    return;
+}
+
+sub output_binary {
+    my $self = shift;
+    my $cgi  = shift;
+    my $blob = shift;
+    my $content_type = shift;
+    my $size = length($$blob);
+    print "HTTP/1.0 200 OK\r\n",
+          $cgi->header(
+              -type => $content_type,
+              -Content_length => $size
+              );
+    binmode(STDOUT, ":raw");
+    print $$blob;
     return;
 }
 
@@ -141,18 +167,26 @@ sub handle_request {
         my ($filename, $dir) = fileparse($fullpath);
         my $name = $filename;
         $name =~ s/\.[^.]+$//;
-        my $tsundoku_dir = $dir.".tsundoku";
         my $input_file = "$dir$name.pdf";
         unless (-e $input_file) {
             $input_file = "$dir$name.djvu";
         }
-        my $out_image = "$tsundoku_dir/$name.png";
         if (-e $input_file) {
-            mkdir $tsundoku_dir unless -d $tsundoku_dir;
-            unless (-e $out_image) {
+            my $sth = $db->prepare(qq(SELECT * FROM BOOKS WHERE NAME='$input_file';)) or die $DBI::errstr;
+            my $rv = $sth->execute() or die $DBI::errstr;
+            my @row = $sth->fetchrow_array();
+            if (@row) {
+                $self->output_binary($cgi, \$row[1], 'image/png');
+            } else {
+                my $out_image = "/tmp/$name.png";
                 system("convert -thumbnail x250 -background white -alpha remove :\"$input_file\"[0] \"$out_image\"");
+                my $blob = `cat "$out_image"`;
+                my $sth = $db->prepare("INSERT OR REPLACE INTO BOOKS VALUES ('$input_file', ?)");
+                $sth->bind_param(1, $blob, SQL_BLOB);
+                $sth->execute();
+                unlink($out_image);
+                $self->output_binary($cgi, \$blob, 'image/png');
             }
-            $self->output_file($cgi, $out_image, "image/png");
         } else {
             $self->not_found($cgi);
         }
