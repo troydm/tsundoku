@@ -135,10 +135,10 @@ sub handle_request {
                     $img =~ s/(\.[^.]+)$/\.png/;
                     $img = $addpath.$img;
                 }
-                $body .= "<div class=\"col\"><span class=\"border\"><a href=\"$addpath$file\">";
+                $body .= "<div class=\"col border\"><a href=\"$addpath$file\">";
                 $body .= "<div class=\"row\"><div class=\"col\"><img src=\"$img\"/></div></div>\n";
                 $body .= "<div class=\"row\"><div class=\"col\">$file</div></div>\n";
-                $body .= "</a></span></div>\n";
+                $body .= "</a></div>\n";
                 $i++;
                 if ($i % 3 == 0) {
                     $body .= "</div>\n<div class=\"row\">\n";
@@ -224,6 +224,7 @@ __DATA__
 <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/css/bootstrap.min.css" integrity="sha384-MCw98/SFnGE8fJT3GXwEOngsV7Zt27NXFoaoApmYm81iuXoPkFOJwJ8ERdknLPMO" crossorigin="anonymous">
 
 <title>Tsundoku $path</title>
+
 </head>
 <body>
 
