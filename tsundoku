@@ -1,6 +1,6 @@
 #!/usr/bin/env perl
 
-# Copyright (C) 2018-2021 Dmitry Geurkov - All Rights Reserved
+# Copyright (C) 2018-2022 Dmitry Geurkov - All Rights Reserved
 # You may use, distribute and modify this code under the
 # terms of the MIT license
 #
@@ -8,200 +8,33 @@
 
 use strict;
 use warnings;
-use 5.010;
-
 use utf8;
-use Cwd;
+use Encode qw/decode_utf8/;
+use feature 'say';
+use Cwd qw/getcwd/;
+use URI::Escape qw/uri_escape_utf8/;
+use Dancer2;
+use DBI qw/:sql_types/;
+use DBD::SQLite::Constants ':dbd_sqlite_string_mode';
+use File::Basename qw/dirname basename/;
+use File::Slurper qw/read_dir read_binary/;
+use File::Temp qw/tmpnam/;
+use File::Copy qw/move/;
+use Template;
 
+binmode STDOUT, ':utf8';
+
+my $host = "0.0.0.0";
+my $port = 3000;
+my $root = getcwd;
+my $tsundoku_dir = dirname($0);
+
+# process arguments
 if (defined $ARGV[0]){
     if ($ARGV[0] eq '-h' || $ARGV[0] eq '--help') {
         say "tsundoku [host:][port]";
         exit 0;
     }
-}
-
-my $root = getcwd;
-
-{
-package Tsundoku;
-use DBI qw(:sql_types);
-use HTTP::Server::Simple;
-use base qw(HTTP::Server::Simple::CGI);
-
-use Encode;
-use File::Basename;
-
-undef $/;
-my $template = <::DATA>;
-close ::DATA;
-local $/ = "\n";
-
-my $db = DBI->connect('DBI:SQLite:dbname=.tsundoku.db','','', { RaiseError => 1 }) or die $DBI::errstr;
-my $stmt = qq(CREATE TABLE IF NOT EXISTS BOOKS (
-                     NAME TEXT PRIMARY KEY NOT NULL,
-                     THUMBNAIL BLOB NULL
-                ););
-my $rv = $db->do($stmt);
-if($rv < 0) {
-    die $DBI::errstr;
-}
-
-sub not_found {
-    my $self = shift;
-    my $cgi  = shift;
-
-    print "HTTP/1.0 404 Not found\r\n";
-    print $cgi->header,
-    $cgi->start_html('Not found'),
-    $cgi->h1('404'),
-    $cgi->h2('Not found'),
-    $cgi->end_html;
-    return;
-}
-
-sub output_file {
-    my $self = shift;
-    my $cgi  = shift;
-    my $path = shift;
-    my $content_type = shift;
-    my @stat = stat $path;
-    my $size = $stat[7];
-    print "HTTP/1.0 200 OK\r\n",
-          $cgi->header(
-              -type => $content_type,
-              -Content_length => $size
-              );
-    my $bytes;
-    binmode(STDOUT, ":raw");
-    open my $fh, '<:raw', $path;
-    while (read($fh, $bytes, 125000)) {
-        print $bytes;
-    }
-    close $fh;
-    return;
-}
-
-sub output_binary {
-    my $self = shift;
-    my $cgi  = shift;
-    my $blob = shift;
-    my $content_type = shift;
-    my $size = length($$blob);
-    print "HTTP/1.0 200 OK\r\n",
-          $cgi->header(
-              -type => $content_type,
-              -Content_length => $size
-              );
-    binmode(STDOUT, ":raw");
-    print $$blob;
-    return;
-}
-
-sub handle_request {
-    my $self = shift;
-    my $cgi  = shift;
-
-    binmode(STDOUT, ":encoding(UTF-8)");
-    my $path = $cgi->path_info();
-    my $fullpath = $root.$path;
-
-    if (-e $fullpath && !($path =~ m/\.\.\//)) {
-        if (-d $fullpath) {
-            opendir (my $dir, $fullpath);
-            my @paths = readdir $dir;
-            closedir $dir;
-            my $body = '';
-            my @files = ();
-            foreach my $file (@paths) {
-                if ($file =~ m/^\./) {
-                    next;
-                }
-                $file = Encode::decode_utf8( $file );
-                push(@files, $file);
-            }
-            $body .= "<div class=\"row\">\n";
-            my $i = 0;
-            my $addpath = $path."/";
-            if ($addpath eq '//') {
-                $addpath = '/';
-            }
-            foreach my $file (sort @files) {
-                my $img = 'https://upload.wikimedia.org/wikipedia/commons/thumb/9/9d/Icons8_flat_document.svg/240px-Icons8_flat_document.svg.png';
-                if (-d ($fullpath."/".$file)) {
-                    $img = 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/a1/Icons8_flat_folder.svg/240px-Icons8_flat_folder.svg.png';
-                }
-                if ($file =~ m/\.(pdf|djvu)$/) {
-                    $img = $file;
-                    $img =~ s/(\.[^.]+)$/\.png/;
-                    $img = $addpath.$img;
-                }
-                $body .= "<div class=\"col border\"><a href=\"$addpath$file\">";
-                $body .= "<div class=\"row\"><div class=\"col\"><img src=\"$img\"/></div></div>\n";
-                $body .= "<div class=\"row\"><div class=\"col\">$file</div></div>\n";
-                $body .= "</a></div>\n";
-                $i++;
-                if ($i % 3 == 0) {
-                    $body .= "</div>\n<div class=\"row\">\n";
-                }
-            }
-            $body .= "</div>\n";
-
-            my $page = $template;
-            $page =~ s/\$path/$path/;
-            $page =~ s/\$body/$body/;
-            print "HTTP/1.0 200 OK\r\n",
-                  "Content-Type: text/html; charset=utf-8\r\n\r\n",
-                  $page;
-        } else {
-            if ($path =~ m/\.?([^.]*)$/) {
-                if ($1 eq 'pdf') {
-                    $self->output_file($cgi, $fullpath, "application/pdf");
-                } else {
-                    $self->output_file($cgi, $fullpath, "application/octet-stream");
-                }
-            } else {
-                $self->not_found($cgi);
-            }
-        }
-    } else {
-        my ($filename, $dir) = fileparse($fullpath);
-        my $name = $filename;
-        $name =~ s/\.[^.]+$//;
-        my $input_file = "$dir$name.pdf";
-        unless (-e $input_file) {
-            $input_file = "$dir$name.djvu";
-        }
-        if (-e $input_file) {
-            my $sth = $db->prepare(qq(SELECT * FROM BOOKS WHERE NAME=?;)) or die $DBI::errstr;
-            $sth->bind_param(1, $input_file, SQL_VARCHAR);
-            my $rv = $sth->execute() or die $DBI::errstr;
-            my @row = $sth->fetchrow_array();
-            if (@row) {
-                $self->output_binary($cgi, \$row[1], 'image/png');
-            } else {
-                my $out_image = "/tmp/$name.png";
-                system("convert -thumbnail x250 -background white -alpha remove :\"$input_file\"[0] \"$out_image\"");
-                my $blob = `cat "$out_image"`;
-                my $sth = $db->prepare("INSERT OR REPLACE INTO BOOKS VALUES (?, ?)");
-                $sth->bind_param(1, $input_file, SQL_VARCHAR);
-                $sth->bind_param(2, $blob, SQL_BLOB);
-                $sth->execute();
-                unlink($out_image);
-                $self->output_binary($cgi, \$blob, 'image/png');
-            }
-        } else {
-            $self->not_found($cgi);
-        }
-    }
-    return;
-}
-
-
-}
-
-my $host = "localhost";
-my $port = 8080;
-if (defined $ARGV[0]) {
     if ($ARGV[0] =~ /([^:]+):(\d+)/) {
         $host = $1;
         $port = $2;
@@ -210,34 +43,518 @@ if (defined $ARGV[0]) {
     }
 }
 
-my $server = Tsundoku->new($port);
-$server->host($host);
-$server->run();
+say "Starting tsundoku in $root";
 
-__DATA__
-<!doctype html>
-<html lang="en">
-<head>
-<!-- Required meta tags -->
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+# change current dir to root
+unless (-d $root) {
+    die 'Root directory doesn\'t exists';
+}
+chdir($root);
 
-<!-- Bootstrap CSS -->
-<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/css/bootstrap.min.css" integrity="sha384-MCw98/SFnGE8fJT3GXwEOngsV7Zt27NXFoaoApmYm81iuXoPkFOJwJ8ERdknLPMO" crossorigin="anonymous">
+# init db
+my $first_time = 0;
+unless (-f '.tsundoku.db') {
+    say 'First time starting up tsundoku, please wait for database to initialize...';
+    $first_time = 1;
+}
+my $db = DBI->connect('DBI:SQLite:dbname=.tsundoku.db','','', { RaiseError => 1, sqlite_unicode => 1}) or die $DBI::errstr;
+$db->{sqlite_string_mode} = DBD_SQLITE_STRING_MODE_UNICODE_FALLBACK;
+$db->do("PRAGMA encoding = 'UTF-8'") or die $db->errstr;
+$db->do('
+CREATE TABLE IF NOT EXISTS BOOKS (
+    PATH TEXT PRIMARY KEY NOT NULL,
+    DIR TEXT KEY NOT NULL,
+    NAME TEXT NOT NULL,
+    DESC TEXT NULL,
+    AUTHORS TEXT NULL,
+    TAGS TEXT NULL,
+    THUMBNAIL BLOB NULL
+    );
+') or die $db->errstr;
 
-<title>Tsundoku $path</title>
+if ($first_time) {
+    init_books_recursively(undef,$root);
+} else {
+    query_books('\'1\'=?','1');
+}
+undef $first_time;
 
-</head>
-<body>
+sub escapeQuote {
+    my ($value) = @_;
+    $value =~ s/'/\\'/g;
+    return $value;
+}
 
-<div class="container-fluid">
-$body
-</div>
+sub escapeHtmlQuote {
+    my ($value) = @_;
+    $value =~ s/'/&#39;/g;
+    $value =~ s/"/&#34;/g;
+    return $value;
+}
 
-<!-- Optional JavaScript -->
-<!-- jQuery first, then Popper.js, then Bootstrap JS -->
-<script src="https://code.jquery.com/jquery-3.3.1.slim.min.js" integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo" crossorigin="anonymous"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.3/umd/popper.min.js" integrity="sha384-ZMP7rVo3mIykV+2+9J3UJ46jBk0WLaUAdn689aCwoqbBJiSnjAK/l8WvCWPIPm49" crossorigin="anonymous"></script>
-<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/js/bootstrap.min.js" integrity="sha384-ChfqqxuZUCnJSK3+MXmPNIyE6ZbWh2IMqE241rYiqJxyMiZ6OW/JmZQ5stwEULTy" crossorigin="anonymous"></script>
-</body>
-</html>
+sub create_thumbnail {
+    my ($path) = @_;
+    my $tempfile = tmpnam() . '.png';
+    my $renamed = $path;
+    if ($path =~ m/[%\[\]?:]/) {
+        $renamed =~ s/[%\[\]?:]/_/g;
+        rename($path, $renamed);
+    }
+    system("convert -thumbnail '200x250>' -gravity center -background white -alpha remove :\"$renamed\"[0] \"$tempfile\"");
+    if ($renamed ne $path) {
+        rename($renamed, $path);
+    }
+    if (-f $tempfile) {
+        my $blob = read_binary($tempfile);
+        unlink $tempfile;
+        return $blob;
+    }
+    return undef;
+}
+
+sub init_book {
+    my ($path) = @_;
+    say "Initializing book $path";
+    my $name = basename($path);
+    $name =~ s/\.[^.]+$//;
+    $name =~ s/[_\-]/ /g;
+    $name =~ s/(\D)\.(\D)/$1 $2/g;
+    my $authors = undef;
+    if ($name =~ /by\s+(.*)$/) {
+        $authors = $1;
+        $authors =~ s/^\s+|\s+$//g
+    }
+    my $year = undef;
+    if ($name =~ /([1-2][0-9]{3})/) {
+        $year = $1;
+        $year =~ s/^\s+|\s+$//g
+    }
+    my $tags = '';
+    unless (dirname($path) eq $root) {
+        $tags = basename(dirname($path));
+    }
+    if (defined $year) {
+        if ($tags) {
+            $tags .= "|$year";
+        } else {
+            $tags = "$year";
+        }
+    }
+    my $blob = create_thumbnail($path);
+    $path = substr($path, length($root));
+    my $dir = dirname($path);
+    my $st = $db->prepare('INSERT OR REPLACE INTO BOOKS VALUES (?, ?, ?, NULL, ?, ?, ?)');
+    $st->bind_param(1, $path, SQL_VARCHAR);
+    $st->bind_param(2, $dir, SQL_VARCHAR);
+    $st->bind_param(3, $name, SQL_VARCHAR);
+    $st->bind_param(4, $authors, SQL_VARCHAR);
+    $st->bind_param(5, $tags, SQL_VARCHAR);
+    $st->bind_param(6, $blob, SQL_BLOB);
+    $st->execute;
+    $st->finish;
+    return (
+        path => $path, dir => $dir, name => $name, desc => undef,
+        authors => $authors, tags => [split(/\|/,$tags)],
+        tags_value => $tags, thumbnail => defined($blob)
+    );
+}
+
+sub update_book {
+    my ($path,$newpath,$name,$authors,$desc,$tags) = @_;
+    my $moved = 0;
+    if ($newpath ne $path) {
+        if (!$newpath || !($newpath =~ /^\//) || $newpath =~ /\/$/) {
+            return 'invalid path specified';
+        }
+        my $books = query_books('PATH=?',$newpath);
+        if (%$books != 0) {
+            return 'book with this path already exists';
+        }
+        if (dirname($newpath) eq dirname($path)) {
+            unless (rename($root.$path, $root.$newpath)) {
+                return 'renaming file failed';
+            }
+        } else {
+            unless (-d dirname($root.$newpath)) {
+                return 'invalid directory specified';
+            }
+            unless (move($root.$path, $root.$newpath)) {
+                return 'moving file failed';
+            } else {
+                $moved = 1;
+            }
+        }
+    }
+    my $dir = dirname($newpath);
+    my $st = $db->prepare('UPDATE BOOKS SET PATH=?, DIR=?, NAME=?, AUTHORS=?, DESC=?, TAGS=? WHERE PATH=?') or die $DBI::errstr;
+    $st->bind_param(1, $newpath, SQL_VARCHAR);
+    $st->bind_param(2, $dir, SQL_VARCHAR);
+    $st->bind_param(3, $name, SQL_VARCHAR);
+    $st->bind_param(4, $authors, SQL_VARCHAR);
+    $st->bind_param(5, $desc, SQL_VARCHAR);
+    $st->bind_param(6, $tags, SQL_VARCHAR);
+    $st->bind_param(7, $path, SQL_VARCHAR);
+    $st->execute;
+    $st->finish;
+    return $moved ? 'book moved' : 'book saved';
+}
+
+sub query_books {
+    my ($cond,$value) = @_;
+    my %books;
+    my $st = $db->prepare('SELECT PATH, DIR, NAME, DESC, AUTHORS, TAGS, LENGTH(THUMBNAIL) FROM BOOKS WHERE '.$cond) or die $DBI::errstr;
+    $st->bind_param(1, $value, SQL_VARCHAR);
+    $st->execute;
+    while (my ($path,$dir,$name,$desc,$authors,$tags, $thumbnail_len) = $st->fetchrow_array) {
+        unless (defined $tags) {
+            $tags = '';
+        }
+        if (-f "$root/$path") {
+            my %book = (
+                path => $path, dir => $dir, name => $name, desc => $desc,
+                authors => $authors, tags => [split(/\|/,$tags)],
+                tags_value => $tags, thumbnail => defined($thumbnail_len)
+            );
+            $books{$book{path}} = \%book;
+        } else {
+            say "Cleaning up $path from database";
+            my $delst = $db->prepare('DELETE FROM BOOKS WHERE PATH=?') or die $DBI::errstr;
+            $delst->bind_param(1, $path, SQL_VARCHAR);
+            $delst->execute;
+            $delst->finish;
+        }
+    }
+    $st->finish;
+    return \%books;
+}
+
+sub init_books {
+    my ($dir) = @_;
+    my $dirpath = substr($dir, length($root));
+    unless ($dirpath) {
+        $dirpath = '/';
+    }
+    my $books = query_books('DIR=?', $dirpath);
+    unless ($dirpath eq '/') {
+        $dirpath .= '/';
+    }
+    my %books = %$books;
+    for my $file (read_dir($dir)) {
+        $file = decode_utf8($file);
+        unless ($file =~ /^\./) {
+            if (-d "$dir/$file") {
+                my $path = $dirpath.$file;
+                my $name = basename($path);
+                $name =~ s/[_\-.]/ /g;
+                $books{$path} = [$path, $name];
+            }
+            elsif (!(exists $books{$dirpath.$file})) {
+                if ($file =~ m/\.pdf$/i || $file =~ m/\.epub$/i || $file =~ m/\.djvu$/i) {
+                    my %book = init_book "$dir/$file";
+                    $books{$book{path}} = \%book;
+                }
+            }
+        }
+    }
+    return \%books;
+}
+
+sub init_books_recursively {
+    my ($books,$path) = @_;
+    if (-d $path) {
+        my $more_books = init_books $path;
+        if (defined $more_books) {
+            if (defined $books) {
+                $books = { %$books, %$more_books };
+            }
+            foreach (keys %$more_books) {
+                if (ref($more_books->{$_}) eq 'ARRAY') {
+                    $books = init_books_recursively($books, $root . $more_books->{$_}->[0]);
+                }
+            }
+        }
+    }
+    return $books;
+}
+
+get '/thumbnail**' => sub {
+    my ($path) = splat;
+    $path = join '/', @$path;
+    my $st = $db->prepare('SELECT THUMBNAIL FROM BOOKS WHERE PATH=?') or die $DBI::errstr;
+    $st->bind_param(1, $path, SQL_VARCHAR);
+    $st->execute or die $DBI::errstr;
+    my @row = $st->fetchrow_array;
+    if (@row == 1) {
+        send_file(\$row[0], content_type => 'image/png');
+    } else {
+        status 'not_found';
+        return 'Thumbnail does not exists';
+    }
+};
+
+get '/download**' => sub {
+    my ($path) = splat;
+    $path = join '/', @$path;
+    $path = $root . $path;
+    if (-f $path) {
+        send_file($path, system_path => 1, filename => basename($path));
+    } else {
+        status 'not_found';
+        return 'File does not exists';
+    }
+};
+
+get '/public/**' => sub {
+    my ($path) = splat;
+    $path = join '/', @$path;
+    send_file $path;
+};
+
+get '/list**' => sub {
+    my ($path) = splat;
+    $path = join '/', @$path;
+    $path =~ s/\/$//;
+    $path = $root . $path;
+    if (-d $path) {
+        my @dirs;
+        my @books;
+        my $books = init_books $path;
+        foreach (keys %$books) {
+            if (ref($books->{$_}) eq 'ARRAY') {
+                push @dirs, $books->{$_};
+            } else {
+                push @books, $books->{$_};
+            }
+        }
+        @dirs = sort { lc($a->[1]) cmp lc($b->[1]) } @dirs;
+        @books = sort { lc($a->{name}) cmp lc($b->{name}) } @books;
+        template 'list.tt', {
+            dirs => \@dirs,
+            books => \@books,
+            quote => \&escapeQuote,
+            htmlQuote => \&escapeHtmlQuote,
+            uriEscape => \&uri_escape_utf8,
+        };
+    } else {
+        status 'not_found';
+        return 'Directory does not exists';
+    }
+};
+
+get '/dir**' => sub {
+    my ($path) = splat;
+    $path = join '/', @$path;
+    my @dirs = ([$path, basename($path)]);
+    my @books;
+    template 'list.tt', {
+        dirs => \@dirs,
+        books => \@books,
+        quote => \&escapeQuote,
+        htmlQuote => \&escapeHtmlQuote,
+        uriEscape => \&uri_escape_utf8,
+    };
+};
+
+sub move_books {
+    my ($path,$newpath) = @_;
+    my @books;
+    my $st = $db->prepare('SELECT PATH FROM BOOKS WHERE DIR=?');
+    $st->bind_param(1, $path, SQL_VARCHAR);
+    $st->execute;
+    while (my ($bookpath) = $st->fetchrow_array) {
+        push @books, $bookpath;
+    }
+    $st->finish;
+    foreach (@books) {
+        $st = $db->prepare('UPDATE BOOKS SET PATH=?, DIR=? WHERE PATH=?');
+        my $newbookpath = $_;
+        $newbookpath =~ s/^\Q$path\E/$newpath/;
+        $st->bind_param(1, $newbookpath, SQL_VARCHAR);
+        $st->bind_param(2, $newpath, SQL_VARCHAR);
+        $st->bind_param(3, $_, SQL_VARCHAR);
+        $st->execute;
+        $st->finish;
+    }
+    for my $file (read_dir($root.$newpath)) {
+        $file = decode_utf8($file);
+        unless ($file =~ /^\./) {
+            if (-d "$root$newpath/$file") {
+                move_books("$path/$file","$newpath/$file");
+            }
+        }
+    }
+}
+
+post '/save-dir**' => sub {
+    my ($path) = splat;
+    $path = join '/', @$path;
+    if (-d $root.$path) {
+        my $newpath = body_parameters->get('path');
+        if ($newpath ne $path) {
+            if (!$newpath || !($newpath =~ /^\//) || $newpath =~ /\/$/) {
+                return 'invalid path specified';
+            }
+            if (dirname($newpath) eq dirname($path)) {
+                unless (rename($root.$path, $root.$newpath)) {
+                    return 'renaming directory failed';
+                }
+                move_books($path, $newpath);
+            } else {
+                unless (-d dirname($root.$newpath)) {
+                    return 'invalid parent directory specified';
+                }
+                unless (move($root.$path, $root.$newpath)) {
+                    return 'moving directory failed';
+                }
+                move_books($path, $newpath);
+                return 'dir moved';
+            }
+        }
+        return 'dir saved';
+    } else {
+        status 'not_found';
+        return 'Dir does not exists';
+    }
+};
+
+get '/book**' => sub {
+    my ($path) = splat;
+    $path = join '/', @$path;
+    my $books = query_books('PATH=?', $path);
+    if (%$books == 1) {
+        my @dirs;
+        my @books = ((values %$books)[0]);
+        template 'list.tt', {
+            dirs => \@dirs,
+            books => \@books,
+            quote => \&escapeQuote,
+            htmlQuote => \&escapeHtmlQuote,
+            uriEscape => \&uri_escape_utf8,
+        };
+    } else {
+        status 'not_found';
+        return 'Book does not exists';
+    }
+};
+
+post '/save-book**' => sub {
+    my ($path) = splat;
+    $path = join '/', @$path;
+    my $books = query_books('PATH=?', $path);
+    if (%$books == 1) {
+        my $newpath = body_parameters->get('path');
+        my $name = body_parameters->get('name');
+        my $authors = body_parameters->get('authors');
+        my $desc = body_parameters->get('desc');
+        my $tags = body_parameters->get('tags');
+        return update_book($path,$newpath,$name,$authors,$desc,$tags);
+    } else {
+        status 'not_found';
+        return 'Book does not exists';
+    }
+};
+
+post '/delete-book**' => sub {
+    my ($path) = splat;
+    $path = join '/', @$path;
+    my $books = query_books('PATH=?', $path);
+    if (%$books == 1) {
+        my $st = $db->prepare('DELETE FROM BOOKS WHERE PATH=?');
+        $st->bind_param(1, $path, SQL_VARCHAR);
+        $st->execute;
+        $st->finish;
+        unlink($root.$path);
+        say "Book $root$path deleted";
+        return 'Book deleted';
+    } else {
+        status 'not_found';
+        return 'Book does not exists';
+    }
+};
+
+sub delete_directory {
+    my ($path) = @_;
+    if (-d $root.$path) {
+        my $books = init_books($root.$path);
+        foreach (keys %$books) {
+            if (ref($books->{$_}) eq 'ARRAY') {
+                my $ret = delete_directory($_);
+                if ($ret ne 'dir deleted') {
+                    return $ret;
+                }
+            } else {
+                my $st = $db->prepare('DELETE FROM BOOKS WHERE PATH=?');
+                $st->bind_param(1, $_, SQL_VARCHAR);
+                $st->execute;
+                $st->finish;
+                unlink($root.$_);
+                say "Book $root$_ deleted";
+            }
+        }
+        unless(rmdir($root.$path)) {
+            return 'Couldn\'t removed directory';
+        }
+        return 'dir deleted';
+    } else {
+        return 'Directory does not exists';
+    }
+}
+
+post '/delete-dir**' => sub {
+    my ($path) = splat;
+    $path = join '/', @$path;
+    $path =~ s/\/$//;
+    return delete_directory($path);
+};
+
+get '/search**' => sub {
+    my ($path) = splat;
+    my $text = query_parameters->get('text');
+    $path = join '/', @$path;
+    $path = $root . $path;
+    $path =~ s/\/$//;
+    if (-d $path) {
+        my @dirs;
+        my @books;
+        my $books = init_books_recursively({},$path);
+        foreach (keys %$books) {
+            if (ref($books->{$_}) eq 'ARRAY') {
+                my $dir = $books->{$_};
+                if ($dir->[1] =~ m/\Q$text\E/i) {
+                    push @dirs, $books->{$_};
+                }
+            } else {
+                my $book = $books->{$_};
+                if ($book->{name} =~ m/\Q$text\E/i || (defined $book->{authors} && $book->{authors} =~ m/\Q$text\E/i) ||
+                    (defined $book->{desc} && $book->{desc} =~ m/\Q$text\E/i) ||
+                    (defined $book->{tags} && (grep {m/\Q$text\E/i} @{$book->{tags}}) > 0)) {
+                    push @books, $books->{$_};
+                }
+            }
+        }
+        @dirs = sort { lc($a->[1]) cmp lc($b->[1]) } @dirs;
+        @books = sort { lc($a->{name}) cmp lc($b->{name}) } @books;
+        template 'list.tt', {
+            dirs => \@dirs,
+            books => \@books,
+            quote => \&escapeQuote,
+            htmlQuote => \&escapeHtmlQuote,
+            uriEscape => \&uri_escape_utf8,
+        };
+    } else {
+        status 'not_found';
+        return 'Directory does not exists';
+    }
+};
+
+get '/' => sub {
+    template 'index.tt', {
+        root => $root,
+    };
+};
+
+# start web server
+set template => 'template_toolkit';
+set host => $host;
+set port => $port;
+start;

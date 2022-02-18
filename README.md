@@ -1,8 +1,8 @@
 # tsundoku
-Simple Perl-based web ebook server.
+Simple Perl Dancer2 based Web EBook Server.
 Tested only on *Linux* but should work on any *Unix* platform.
 Requires only modern 5.10+ Perl version and ImageMagic with pdf/djvu reading capability installed.
-Only has DBI, DBM::SQLite and HTTP::Server::Simple CPAN dependency.
+Only uses DBI, DBM::SQLite, Dancer2 and Template::Toolkit CPAN dependencies
 
 ## NOTE
 
@@ -15,15 +15,15 @@ Like this:
 
 ## WARNING
 
-This serves pretty much any file via web under from folder and sub-folders and wasn't heavily tested for security robustness so use it on your own risk.
+This serves pretty much any file via web from folder and sub-folders and wasn't heavily tested for security robustness so use it on your own risk.
 
 ## Installation
 
 To install just run this command:
 
-    $ sudo cpanm DBI DBD::SQLite HTTP::Server::Simple
-    $ sudo curl https://raw2.github.com/troydm/tsundoku/master/tsundoku -o /usr/local/bin/tsundoku
-    $ sudo chmod +x /usr/local/bin/tsundoku
+    $ sudo cpanm DBI DBD::SQLite Dancer2 Template::Toolkit
+    $ git clone https://github.com/troydm/tsundoku.git
+    $ chmod +x ./tsundoku/tsundoku
 
 ## Usage
 
@@ -36,6 +36,6 @@ Following are examples on how to run tsundoku on different host/port:
     $ tsundoku 7080
 
 
-## License 
+## License
 
 [MIT](http://opensource.org/licenses/MIT)

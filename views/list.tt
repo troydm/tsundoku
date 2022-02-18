@@ -1,0 +1,135 @@
+[% FOREACH dir IN dirs %]
+    <div dir-id="[% htmlQuote(dir.0) %]" class="col-auto p-1">
+        <div class="container border border-secondary bg-light">
+            <div class="row">
+                <div class="col">
+                    <a href="#" onclick="event.stopPropagation(); return setRoot('[% htmlQuote(quote(dir.0)) %]')">
+                        <img src="/public/directory.png" height="250">
+                    </a>
+                </div>
+            </div>
+            <div class="row">
+                <div class="d-flex flex-row justify-content-center align-items-center">
+                    <div class="ps-2 visually-hidden" mode="edit">
+                        <div class="flex-fill py-1">
+                            <input form-id="path" class="form-control" value="[% htmlQuote(dir.0) %]" placeholder="Path">
+                        </div>
+                    </div>
+                    <div class="flex-fill ms-2" mode="view">
+                        <a href="#" onclick="event.stopPropagation(); return setRoot('[% htmlQuote(quote(dir.0)) %]')" class="link-secondary text-decoration-none">
+                            <h5>[% dir.1 %]</h5>
+                        </a>
+                    </div>
+                    <div view="view" class="ms-2" style="min-width: 24px" mode="view">
+                        <a href="#" onclick="event.stopPropagation(); return editDir('[% htmlQuote(quote(dir.0)) %]')" class="text-decoration-none">
+                            <img src="/public/edit.png" width="24" height="24">
+                        </a>
+                    </div>
+                    <div class="visually-hidden px-1" style="min-width: 24px" mode="edit">
+                        <a href="#" onclick="event.stopPropagation(); return saveDir('[% htmlQuote(quote(dir.0)) %]')" class="text-decoration-none">
+                            <img src="/public/save.png" width="24" height="24">
+                        </a>
+                    </div>
+                    <div class="visually-hidden px-1" style="min-width: 24px" mode="edit">
+                        <a href="#" onclick="event.stopPropagation(); return deleteDir('[% htmlQuote(quote(dir.0)) %]', '[% htmlQuote(quote(dir.1)) %]')" class="text-decoration-none">
+                            <img src="/public/delete.png" width="24" height="24">
+                        </a>
+                    </div>
+                    <div class="visually-hidden px-1" style="min-width: 24px" mode="edit">
+                        <a href="#" onclick="event.stopPropagation(); return cancelDir('[% htmlQuote(quote(dir.0)) %]')" class="text-decoration-none">
+                            <img src="/public/cancel.png" width="24" height="24">
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+[% END %]
+[% FOREACH book IN books %]
+    <div book-id="[% htmlQuote(book.path) %]" class="col-xl-4 p-1">
+        <div class="d-flex flex-row border border-secondary bg-light h-100 p-2">
+                <div class="d-flex justify-content-center" style="min-width: 200px; min-height: 250px">
+                    <div class="align-self-top">
+                        <a href="/download[% uriEscape(book.path) %]" target="_blank">
+                            [% IF book.thumbnail %]
+                            <img src="/thumbnail[% uriEscape(book.path) %]" alt="[% book.name %]">
+                            [% ELSE %]
+                            <img src="/public/file.png" alt="[% book.name %]" width="200" height="200">
+                            [% END %]
+                        </a>
+                    </div>
+                </div>
+                <div class="w-100">
+                    <div class="d-flex flex-column h-100">
+                        <div class="ps-2 visually-hidden" mode="edit">
+                            <div class="flex-fill py-1">
+                                <input form-id="path" class="form-control" value="[% htmlQuote(book.path) %]" placeholder="Path">
+                            </div>
+                        </div>
+                        <div class="ps-2">
+                            <div class="d-flex flex-row justify-content-between">
+                                <div class="flex-fill" mode="view">
+                                    <a href="/download[% uriEscape(book.path) %]" target="_blank" class="link-secondary text-decoration-none">
+                                        <h5>[% book.name %]</h5>
+                                    </a>
+                                </div>
+                                <div class="flex-fill visually-hidden" mode="edit">
+                                    <input form-id="name" class="form-control" value="[% htmlQuote(book.name) %]">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="ps-2">
+                            <div class="d-flex flex-row justify-content-between">
+                                [% IF book.authors %]
+                                <div class="flex-fill text-decoration-underline" mode="view">
+                                    [% book.authors %]
+                                </div>
+                                [% END %]
+                                <div class="flex-fill visually-hidden py-1" mode="edit">
+                                    <input form-id="authors" class="form-control" value="[% htmlQuote(book.authors) %]" placeholder="Authors">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex-fill ps-2" mode="view">
+                            [% book.desc %]
+                        </div>
+                        <div class="flex-fill ps-2 pb-1 visually-hidden" mode="edit">
+                            <textarea form-id="desc" class="form-control h-100">[% htmlQuote(book.desc) %]</textarea>
+                        </div>
+                        <div class="ps-2">
+                            <div class="d-flex flex-row justify-content-between align-items-center">
+                                <div class="flex-fill" mode="view">
+                                   [% FOREACH tag IN book.tags %]
+                                   <span class="badge rounded-pill bg-secondary">[% tag %]</span>
+                                   [% END %]
+                                </div>
+                                <div class="flex-fill visually-hidden" mode="edit">
+                                    <input form-id="tags" class="form-control" value="[% htmlQuote(book.tags_value) %]" placeholder="Tags separated by | character (vertical line)">
+                                </div>
+                                <div style="min-width: 24px" class="px-1" mode="view">
+                                    <a href="#" onclick="event.stopPropagation(); return editBook('[% htmlQuote(quote(book.path)) %]')" class="text-decoration-none">
+                                        <img src="/public/edit.png" width="24" height="24">
+                                    </a>
+                                </div>
+                                <div class="visually-hidden px-1" style="min-width: 24px" mode="edit">
+                                    <a href="#" onclick="event.stopPropagation(); return saveBook('[% htmlQuote(quote(book.path)) %]')" class="text-decoration-none">
+                                        <img src="/public/save.png" width="24" height="24">
+                                    </a>
+                                </div>
+                                <div class="visually-hidden px-1" style="min-width: 24px" mode="edit">
+                                    <a href="#" onclick="event.stopPropagation(); return deleteBook('[% htmlQuote(quote(book.path)) %]','[% book.name %]')" class="text-decoration-none">
+                                        <img src="/public/delete.png" width="24" height="24">
+                                    </a>
+                                </div>
+                                <div class="visually-hidden px-1" style="min-width: 24px" mode="edit">
+                                    <a href="#" onclick="event.stopPropagation(); return cancelBook('[% htmlQuote(quote(book.path)) %]')" class="text-decoration-none">
+                                        <img src="/public/cancel.png" width="24" height="24">
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+            </div>
+        </div>
+    </div>
+[% END %]
