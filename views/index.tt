@@ -214,17 +214,17 @@
         <nav class="navbar navbar-expand-lg navbar-dark bg-dark" aria-label="Eighth navbar example">
             <div class="container">
                 <a class="navbar-brand" href="#" onclick="event.stopPropagation(); return setRoot('/')">Tsundoku</a>
-                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
+                <div id="loading" class="spinner-border text-secondary visually-hidden" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarCollapse" aria-controls="navbarCollapse" aria-expanded="false" aria-label="Toggle navigation">
                     <span class="navbar-toggler-icon"></span>
                 </button>
 
-                <div class="collapse navbar-collapse">
-                    <div id="loading" class="spinner-border text-secondary visually-hidden" role="status">
-                        <span class="visually-hidden">Loading...</span>
-                    </div>
+                <div class="collapse navbar-collapse" id="navbarCollapse">
                     <ul id="navbar" class="navbar-nav me-auto mb-2 mb-lg-0">
                     </ul>
-                    <form>
+                    <form class="d-flex">
                         <div class="input-group">
                             <input class="form-control search-box" id="search" placeholder="Search">
                             <button class="btn btn-outline-secondary" type="button" id="search-clear" onclick="event.stopPropagation(); return searchText('');">X</button>
