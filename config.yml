@@ -1,0 +1,27 @@
+appname: "Tsundoku"
+charset: "UTF-8"
+session: "Simple"
+template: "template_toolkit"
+logger: "Console"
+
+engines:
+  logger:
+    Console:
+      log_level: info
+
+plugins:
+  Auth::Extensible:
+    no_default_pages: 1
+    no_login_handler: 1
+    realms:
+      config:
+        provider: Config
+        users:
+          - user: 'admin'
+            pass: 'admin'
+            name: 'Admin'
+            roles:
+              - admin
+          - user: 'reader'
+            pass: 'reader'
+            name: 'Reader'

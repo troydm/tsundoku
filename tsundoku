@@ -14,6 +14,7 @@ use feature 'say';
 use Cwd qw/getcwd/;
 use URI::Escape qw/uri_escape_utf8/;
 use Dancer2;
+use Dancer2::Plugin::Auth::Extensible;
 use DBI qw/:sql_types/;
 use DBD::SQLite::Constants ':dbd_sqlite_string_mode';
 use File::Basename qw/dirname basename/;
@@ -24,7 +25,7 @@ use Template;
 
 binmode STDOUT, ':utf8';
 
-my $host = "0.0.0.0";
+my $host = '0.0.0.0';
 my $port = 3000;
 my $root = getcwd;
 my $tsundoku_dir = dirname($0);
@@ -91,6 +92,12 @@ sub escapeHtmlQuote {
     $value =~ s/"/&#34;/g;
     return $value;
 }
+
+sub remember_session {
+    session->expires(315569520) if session('logged_in_user_rememberMe');
+}
+
+hook before => \&remember_session;
 
 sub create_thumbnail {
     my ($path) = @_;
@@ -277,7 +284,7 @@ sub init_books_recursively {
     return $books;
 }
 
-get '/thumbnail**' => sub {
+get '/thumbnail**' => require_login sub {
     my ($path) = splat;
     $path = join '/', @$path;
     my $st = $db->prepare('SELECT THUMBNAIL FROM BOOKS WHERE PATH=?') or die $DBI::errstr;
@@ -292,7 +299,7 @@ get '/thumbnail**' => sub {
     }
 };
 
-get '/download**' => sub {
+get '/download**' => require_login sub {
     my ($path) = splat;
     $path = join '/', @$path;
     $path = $root . $path;
@@ -310,7 +317,11 @@ get '/public/**' => sub {
     send_file $path;
 };
 
-get '/list**' => sub {
+get '/favicon.ico' => sub {
+    send_file 'favicon.ico';
+};
+
+get '/list**' => require_login sub {
     my ($path) = splat;
     $path = join '/', @$path;
     $path =~ s/\/$//;
@@ -334,6 +345,7 @@ get '/list**' => sub {
             quote => \&escapeQuote,
             htmlQuote => \&escapeHtmlQuote,
             uriEscape => \&uri_escape_utf8,
+            admin => user_has_role('admin'),
         };
     } else {
         status 'not_found';
@@ -341,7 +353,7 @@ get '/list**' => sub {
     }
 };
 
-get '/dir**' => sub {
+get '/dir**' => require_login sub {
     my ($path) = splat;
     $path = join '/', @$path;
     my @dirs = ([$path, basename($path)]);
@@ -385,7 +397,7 @@ sub move_books {
     }
 }
 
-post '/save-dir**' => sub {
+post '/save-dir**' => require_role admin => sub {
     my ($path) = splat;
     $path = join '/', @$path;
     if (-d $root.$path) {
@@ -417,7 +429,7 @@ post '/save-dir**' => sub {
     }
 };
 
-get '/book**' => sub {
+get '/book**' => require_login sub {
     my ($path) = splat;
     $path = join '/', @$path;
     my $books = query_books('PATH=?', $path);
@@ -437,7 +449,7 @@ get '/book**' => sub {
     }
 };
 
-post '/save-book**' => sub {
+post '/save-book**' => require_role admin => sub {
     my ($path) = splat;
     $path = join '/', @$path;
     my $books = query_books('PATH=?', $path);
@@ -454,7 +466,7 @@ post '/save-book**' => sub {
     }
 };
 
-post '/delete-book**' => sub {
+post '/delete-book**' => require_role admin => sub {
     my ($path) = splat;
     $path = join '/', @$path;
     my $books = query_books('PATH=?', $path);
@@ -500,14 +512,14 @@ sub delete_directory {
     }
 }
 
-post '/delete-dir**' => sub {
+post '/delete-dir**' => require_role admin => sub {
     my ($path) = splat;
     $path = join '/', @$path;
     $path =~ s/\/$//;
     return delete_directory($path);
 };
 
-get '/search**' => sub {
+get '/search**' => require_login sub {
     my ($path) = splat;
     my $text = query_parameters->get('text');
     $path = join '/', @$path;
@@ -547,14 +559,42 @@ get '/search**' => sub {
     }
 };
 
-get '/' => sub {
+get '/' => require_login sub {
     template 'index.tt', {
         root => $root,
+        user => logged_in_user->{name},
+        admin => user_has_role('admin'),
     };
 };
 
+get '/login' => sub {
+    template 'login.tt';
+};
+
+post '/login' => sub {
+    my $login = body_parameters->get('login');
+    my $password = body_parameters->get('password');
+    my $rememberMe = body_parameters->get('rememberMe');
+    my ($success, $realm) = authenticate_user($login, $password);
+    if ($success) {
+        app->change_session_id if app->can('change_session_id');
+        session logged_in_user => $login;
+        session logged_in_user_realm => $realm;
+        session logged_in_user_rememberMe => $rememberMe;
+        redirect '/';
+    } else {
+        sleep 3;
+        template 'login.tt', { login => $login, password => $password, rememberMe => $rememberMe, error => 'Invalid Login or Password' };
+    }
+};
+
+any '/logout' => sub {
+    app->destroy_session;
+    redirect '/login';
+};
+
 # start web server
-set template => 'template_toolkit';
 set host => $host;
 set port => $port;
-start;
+set confdir => $tsundoku_dir;
+dance;

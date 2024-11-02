@@ -20,6 +20,7 @@
                             <h5>[% dir.1 %]</h5>
                         </a>
                     </div>
+                    [% IF admin %]
                     <div view="view" class="ms-2" style="min-width: 24px" mode="view">
                         <a href="#" onclick="event.stopPropagation(); return editDir('[% htmlQuote(quote(dir.0)) %]')" class="text-decoration-none">
                             <img src="/public/edit.png" width="24" height="24">
@@ -40,6 +41,7 @@
                             <img src="/public/cancel.png" width="24" height="24">
                         </a>
                     </div>
+                    [% END %]
                 </div>
             </div>
         </div>
@@ -106,6 +108,7 @@
                                 <div class="flex-fill visually-hidden" mode="edit">
                                     <input form-id="tags" class="form-control" value="[% htmlQuote(book.tags_value) %]" placeholder="Tags separated by | character (vertical line)">
                                 </div>
+                                [% IF admin %]
                                 <div style="min-width: 24px" class="px-1" mode="view">
                                     <a href="#" onclick="event.stopPropagation(); return editBook('[% htmlQuote(quote(book.path)) %]')" class="text-decoration-none">
                                         <img src="/public/edit.png" width="24" height="24">
@@ -126,6 +129,7 @@
                                         <img src="/public/cancel.png" width="24" height="24">
                                     </a>
                                 </div>
+                                [% END %]
                             </div>
                         </div>
                     </div>
