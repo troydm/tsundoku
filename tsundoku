@@ -596,5 +596,6 @@ any '/logout' => sub {
 # start web server
 set host => $host;
 set port => $port;
+set behind_proxy => true;
 set confdir => $tsundoku_dir;
 dance;
