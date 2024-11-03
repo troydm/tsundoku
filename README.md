@@ -21,7 +21,7 @@ This serves pretty much any file via web from folder and sub-folders and wasn't 
 
 To install just run this command:
 
-    $ sudo cpanm DBI DBD::SQLite Dancer2 Dancer2::Plugin::Auth::Extensible Template::Toolkit
+    $ sudo cpanm DBI DBD::SQLite Dancer2 Dancer::Plugin::RequireSSL Dancer2::Plugin::Auth::Extensible Template::Toolkit
     $ git clone https://github.com/troydm/tsundoku.git
     $ chmod +x ./tsundoku/tsundoku
 

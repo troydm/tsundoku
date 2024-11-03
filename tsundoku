@@ -15,6 +15,7 @@ use Cwd qw/getcwd/;
 use URI::Escape qw/uri_escape_utf8/;
 use Dancer2;
 use Dancer2::Plugin::Auth::Extensible;
+use Dancer::Plugin::RequireSSL;
 use DBI qw/:sql_types/;
 use DBD::SQLite::Constants ':dbd_sqlite_string_mode';
 use File::Basename qw/dirname basename/;
@@ -31,20 +32,27 @@ my $root = getcwd;
 my $tsundoku_dir = dirname($0);
 
 # process arguments
-if (defined $ARGV[0]){
-    if ($ARGV[0] eq '-h' || $ARGV[0] eq '--help') {
-        say "tsundoku [host:][port]";
+if (defined $ARGV[-1]){
+    if ($ARGV[-1] eq '-h' || $ARGV[-1] eq '--help') {
+        say "tsundoku [options] [host:][port]";
+        say "options:";
+        say "    --ssl - use require ssl plugin";
         exit 0;
     }
-    if ($ARGV[0] =~ /([^:]+):(\d+)/) {
+    if ($ARGV[-1] =~ /([^:]+):(\d+)/) {
         $host = $1;
         $port = $2;
-    } elsif ($ARGV[0] =~ /(\d+)/) {
+    } elsif ($ARGV[-1] =~ /(\d+)/) {
         $port = $1;
     }
 }
 
 say "Starting tsundoku in $root";
+
+if (grep( /^\s*--ssl\s*$/, @ARGV )) {
+    require_ssl();
+    say 'require ssl option enabled';
+}
 
 # change current dir to root
 unless (-d $root) {
