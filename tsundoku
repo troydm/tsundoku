@@ -364,6 +364,7 @@ get '/dir**' => require_login sub {
         quote => \&escapeQuote,
         htmlQuote => \&escapeHtmlQuote,
         uriEscape => \&uri_escape_utf8,
+        admin => user_has_role('admin'),
     };
 };
 
@@ -442,6 +443,7 @@ get '/book**' => require_login sub {
             quote => \&escapeQuote,
             htmlQuote => \&escapeHtmlQuote,
             uriEscape => \&uri_escape_utf8,
+            admin => user_has_role('admin'),
         };
     } else {
         status 'not_found';
@@ -552,6 +554,7 @@ get '/search**' => require_login sub {
             quote => \&escapeQuote,
             htmlQuote => \&escapeHtmlQuote,
             uriEscape => \&uri_escape_utf8,
+            admin => user_has_role('admin'),
         };
     } else {
         status 'not_found';
