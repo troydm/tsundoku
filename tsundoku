@@ -107,7 +107,7 @@ sub create_thumbnail {
         $renamed =~ s/[%\[\]?:]/_/g;
         rename($path, $renamed);
     }
-    system("convert -thumbnail '200x250>' -gravity center -background white -alpha remove :\"$renamed\"[0] \"$tempfile\"");
+    system("convert -thumbnail '200x250>' -gravity center -background white -alpha remove \"$renamed\"[0] \"$tempfile\"");
     if ($renamed ne $path) {
         rename($renamed, $path);
     }
